@@ -1,0 +1,27 @@
+{
+  "name": "catholic-ecosystem",
+  "version": "1.0.0",
+  "description": "A Catholic Ecosystem Platform to manage Digital Evangelization — eSocial Doméstico scraper",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "echo \"No tests configured yet\" && exit 0",
+    "lint": "eslint src/ && prettier --check src/"
+  },
+  "keywords": [],
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.49.1",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2"
+  }
+}
