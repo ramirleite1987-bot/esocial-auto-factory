@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "LOG_LEVEL=debug node index.js",
-    "setup": "node -e \"require('./src/notifications/whatsapp').initWhatsApp()\"",
+    "setup": "npx playwright install chromium",
     "run-now": "node index.js --run-now"
   },
   "engines": {
@@ -17,11 +17,11 @@
     "dotenv": "^16.3.1",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.5",
-    "playwright": "^1.40.0",
+    "playwright": "^1.59.1",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.34.6",
     "winston": "^3.10.0",
-    "winston-daily-rotate-file": "^4.7.1"
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "private": true
 }

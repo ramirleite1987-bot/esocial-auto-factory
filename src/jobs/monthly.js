@@ -133,7 +133,7 @@ async function runJob() {
 
     // Step 6: Generate DAE and download PDF
     const guiaId = await gerarGuia(client, competencia);
-    const pdfFilename = `DAE_${competencia.ano}_${String(competencia.mes).padStart(2, '0')}.pdf`;
+    const pdfFilename = `DAE-${String(competencia.mes).padStart(2, '0')}-${competencia.ano}.pdf`;
     const pdfPath = path.join(GUIAS_DIR, pdfFilename);
     await downloadGuiaPDF(client, guiaId, pdfPath);
 
@@ -151,7 +151,7 @@ async function runJob() {
 
     // Step 8: Send WhatsApp success message
     try {
-      const whatsappNumber = process.env.WHATSAPP_NOTIFY_NUMBER;
+      const whatsappNumber = process.env.WHATSAPP_NUMBER;
       if (whatsappNumber) {
         await sendWhatsApp(
           whatsappNumber,
@@ -179,7 +179,7 @@ async function runJob() {
     }
 
     try {
-      const whatsappNumber = process.env.WHATSAPP_NOTIFY_NUMBER;
+      const whatsappNumber = process.env.WHATSAPP_NUMBER;
       if (whatsappNumber) {
         await sendWhatsApp(
           whatsappNumber,
