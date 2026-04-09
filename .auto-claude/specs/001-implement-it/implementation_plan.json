@@ -1,0 +1,424 @@
+{
+  "feature": "eSocial Domestico Automation Job",
+  "workflow_type": "feature",
+  "workflow_rationale": "Greenfield project — every module, configuration file, and directory structure must be created from scratch. There is no existing codebase to refactor or migrate. The entire application is a new feature delivering end-to-end payroll automation.",
+  "phases": [
+    {
+      "id": "phase-1-foundation",
+      "name": "Project Foundation",
+      "type": "setup",
+      "description": "Create project scaffolding: package.json with pinned dependencies, environment config template, .gitignore, directory structure, and the shared Winston logger that all other modules depend on.",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create package.json with pinned dependencies (axios@1.15.0 exact), .env.example with all 14 environment variables, update .gitignore to exclude node_modules/.env/logs/output/sessions, and create directory structure with .gitkeep files (src/auth/, src/esocial/, src/notifications/, src/jobs/, src/utils/, config/, logs/, output/guias/).",
+          "service": "esocial-auto",
+          "files_to_modify": [
+            ".gitignore"
+          ],
+          "files_to_create": [
+            "package.json",
+            ".env.example",
+            "config/.gitkeep",
+            "logs/.gitkeep",
+            "output/guias/.gitkeep"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const pkg = require('./package.json'); console.log(pkg.dependencies.axios === '1.15.0' ? 'AXIOS_PINNED_OK' : 'AXIOS_PIN_FAIL'); console.log(pkg.engines.node === '>=18' ? 'ENGINES_OK' : 'ENGINES_FAIL');\"",
+            "expected": "AXIOS_PINNED_OK and ENGINES_OK printed"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Create src/utils/logger.js — Winston logger with DailyRotateFile transport (30d retention, app-%DATE%.log pattern), colored console transport, configurable LOG_LEVEL and LOG_DIR via env vars, mandatory .on('error') handler for DailyRotateFile v5.0.0+, and format: [timestamp] [LEVEL] [context] message. Never log sensitive data.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/utils/logger.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && npm install --ignore-scripts 2>&1 | tail -1 && node -e \"const logger = require('./src/utils/logger'); logger.info('Test message'); console.log('LOGGER_OK');\"",
+            "expected": "LOGGER_OK printed, no errors"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-authentication",
+      "name": "Gov.br Authentication & HTTP Client",
+      "type": "implementation",
+      "description": "Build the Playwright-based gov.br headless login with session capture and persistence, plus the Axios HTTP client factory with auto-reauth interceptor for eSocial API calls.",
+      "depends_on": [
+        "phase-1-foundation"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create src/auth/govbr.js — Playwright headless authentication module. authenticate() function: launch Chromium headless, navigate to login.esocial.gov.br, fill CPF/password from env vars, submit, wait for redirect, capture session via context.storageState(). Persist session to session.json for reuse across restarts. Build cookie string for Axios. Handle CAPTCHA/2FA detection (log + abort). Restore existing session.json if valid. Export { authenticate }.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/auth/govbr.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const { authenticate } = require('./src/auth/govbr'); console.log(typeof authenticate === 'function' ? 'AUTH_MODULE_OK' : 'AUTH_MODULE_FAIL');\"",
+            "expected": "AUTH_MODULE_OK printed"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Create src/esocial/client.js — Axios HTTP client factory. createClient(session) function: create Axios instance with baseURL https://login.esocial.gov.br, 30s timeout, Cookie header built from session.cookies array. Response interceptor catches 401/403, uses _retried flag to prevent infinite loops, calls authenticate() for re-auth, updates both error.config.headers.Cookie AND instance.defaults.headers.Cookie with new session. Export { createClient }.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/esocial/client.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const { createClient } = require('./src/esocial/client'); console.log(typeof createClient === 'function' ? 'CLIENT_MODULE_OK' : 'CLIENT_MODULE_FAIL');\"",
+            "expected": "CLIENT_MODULE_OK printed"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-business-logic",
+      "name": "Core eSocial Business Logic",
+      "type": "implementation",
+      "description": "Implement the core payroll operations: listing open payrolls, verifying competency status, closing payroll, generating DAE slip, and downloading the PDF.",
+      "depends_on": [
+        "phase-2-authentication"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create src/esocial/folha.js — Payroll management module. Functions: listarFolhasAbertas(client) returns array of open payrolls; verificarCompetencia(client, competencia) returns competency status; encerrarFolha(client, competencia) closes payroll with graceful handling if already closed (log + skip). Auto-calculate competencia from current date when COMPETENCIA_MES/ANO is 'auto' (previous month, handling Jan→Dec year rollback). All operations logged, no sensitive data exposed. Export { listarFolhasAbertas, verificarCompetencia, encerrarFolha }.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/esocial/folha.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const m = require('./src/esocial/folha'); const fns = ['listarFolhasAbertas','verificarCompetencia','encerrarFolha']; const ok = fns.every(f => typeof m[f] === 'function'); console.log(ok ? 'FOLHA_MODULE_OK' : 'FOLHA_MODULE_FAIL');\"",
+            "expected": "FOLHA_MODULE_OK printed"
+          },
+          "status": "completed",
+          "notes": "Created src/esocial/folha.js with listarFolhasAbertas, verificarCompetencia, encerrarFolha. Auto-competência calculation handles Jan→Dec rollback. Graceful already-closed handling. All exports verified.",
+          "updated_at": "2026-04-09T10:09:32.517840+00:00"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Create src/esocial/guia.js — DAE generation and PDF download module. Functions: gerarGuia(client, competencia) triggers DAE slip generation, returns guia ID; downloadGuiaPDF(client, guiaId, outputPath) downloads PDF to output/guias/DAE-MM-YYYY.pdf. Create output/guias/ directory if missing (fs.mkdirSync recursive). Check file existence before download to prevent duplicates. Validate downloaded file is non-empty. Export { gerarGuia, downloadGuiaPDF }.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/esocial/guia.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const m = require('./src/esocial/guia'); const fns = ['gerarGuia','downloadGuiaPDF']; const ok = fns.every(f => typeof m[f] === 'function'); console.log(ok ? 'GUIA_MODULE_OK' : 'GUIA_MODULE_FAIL');\"",
+            "expected": "GUIA_MODULE_OK printed"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-notifications",
+      "name": "Notification Channels",
+      "type": "implementation",
+      "description": "Build the SMTP email notification module with PDF attachment support and the WhatsApp Web client with persistent session and QR code pairing.",
+      "depends_on": [
+        "phase-1-foundation"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create src/notifications/email.js — SMTP email notification module using Nodemailer. Functions: createTransporter() creates SMTP transporter from env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS), calls transporter.verify() at init to validate connection; sendEmail({ subject, body, attachments }) sends email to EMAIL_TO with HTML body, supports PDF attachment for DAE. Both success and failure notification templates. All SMTP errors caught and logged (best-effort, never abort job). Export { initEmail, sendEmail }.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/notifications/email.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const m = require('./src/notifications/email'); console.log(typeof m.sendEmail === 'function' ? 'EMAIL_MODULE_OK' : 'EMAIL_MODULE_FAIL');\"",
+            "expected": "EMAIL_MODULE_OK printed"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Create src/notifications/whatsapp.js — WhatsApp Web notification module using whatsapp-web.js. Functions: initWhatsApp() initializes Client with LocalAuth strategy, session stored in .wwebjs_auth/. Display QR code via qrcode-terminal on first run. Handle events: 'qr' (display QR), 'ready' (log ready), 'disconnected' (log + re-display QR), 'auth_failure' (log error). Configure puppeteer to reuse Playwright's Chromium binary via executablePath to save ~400MB disk. sendWhatsApp(number, message) sends message to configured number. Export { initWhatsApp, sendWhatsApp, getWhatsAppClient }.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/notifications/whatsapp.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const m = require('./src/notifications/whatsapp'); console.log(typeof m.initWhatsApp === 'function' && typeof m.sendWhatsApp === 'function' ? 'WHATSAPP_MODULE_OK' : 'WHATSAPP_MODULE_FAIL');\"",
+            "expected": "WHATSAPP_MODULE_OK printed"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-orchestration",
+      "name": "Job Orchestration & Entry Point",
+      "type": "implementation",
+      "description": "Build the monthly job orchestrator that sequences auth → close → DAE → notify with dual-channel error handling, plus the application entry point with cron scheduling, WhatsApp init, and --run-now CLI support.",
+      "depends_on": [
+        "phase-3-business-logic",
+        "phase-4-notifications"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create src/jobs/monthly.js — Job orchestrator module. Functions: runJob() executes full sequence: (1) acquire file lock /tmp/esocial-auto.lock (fs.writeFileSync flag:'wx', with PID for stale detection), (2) authenticate via govbr, (3) create HTTP client, (4) calculate competencia (auto from date or env), (5) list/verify/close payroll, (6) generate DAE + download PDF, (7) send success email with PDF attachment, (8) send WhatsApp success message, (9) release lock in finally. On ANY error: best-effort notification on both channels (each in own try/catch), then re-throw. setupCron() configures node-cron schedule from CRON_SCHEDULE or JOB_DIA_FECHAMENTO env var with timezone America/Sao_Paulo, validates expression at startup with cron.validate(). getCompetencia() auto-calculates previous month handling Jan→Dec rollback. Export { runJob, setupCron, getCompetencia }.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "src/jobs/monthly.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const m = require('./src/jobs/monthly'); const fns = ['runJob','setupCron','getCompetencia']; const ok = fns.every(f => typeof m[f] === 'function'); console.log(ok ? 'MONTHLY_MODULE_OK' : 'MONTHLY_MODULE_FAIL');\"",
+            "expected": "MONTHLY_MODULE_OK printed"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Create index.js — Application entry point. Load dotenv first. Parse --run-now CLI flag from process.argv. Initialize WhatsApp client (await 'ready' event). On WhatsApp 'ready': set up cron job via setupCron(). If --run-now: immediately call runJob() then process.exit(). Handle unhandled rejections and uncaught exceptions (log + notify). Log startup info (schedule, competencia target, Node.js version). Validate required env vars at startup (GOVBR_CPF, GOVBR_SENHA minimum). Validate cron expression at startup.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [
+            "index.js"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"try { require('./index.js'); } catch(e) { console.log(e.message.includes('GOVBR_CPF') || e.message.includes('Missing') || e.message.includes('required') ? 'INDEX_VALIDATES_ENV_OK' : 'INDEX_FAIL: ' + e.message); }\"",
+            "expected": "INDEX_VALIDATES_ENV_OK printed (fails gracefully due to missing .env, confirming validation works)"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration",
+      "name": "Integration & Hardening",
+      "type": "integration",
+      "description": "Verify all modules wire together correctly. Test npm install, npm run setup, module imports chain, CLI flags. Ensure no circular dependencies, all exports match expected API, and edge cases are handled.",
+      "depends_on": [
+        "phase-5-orchestration"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "End-to-end integration verification: (1) Verify npm install completes without errors. (2) Verify all 8 source modules load without circular dependency errors (require each module). (3) Verify --run-now flag is parsed correctly. (4) Verify .gitignore excludes node_modules, .env, logs/, output/, session.json, .wwebjs_auth/. (5) Verify package.json has correct scripts (start, dev, setup, run-now). (6) Verify axios is pinned to exactly 1.15.0. (7) Verify directory structure matches spec. (8) Fix any integration issues found.",
+          "service": "esocial-auto",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd /home/rlmit/workspace/esocial-auto && npm install --ignore-scripts 2>&1 | tail -3 && node -e \"const modules = ['./src/utils/logger','./src/auth/govbr','./src/esocial/client','./src/esocial/folha','./src/esocial/guia','./src/notifications/email','./src/notifications/whatsapp','./src/jobs/monthly']; let ok=true; modules.forEach(m => { try { require(m); } catch(e) { console.error('FAIL:', m, e.message); ok=false; } }); console.log(ok ? 'ALL_MODULES_OK' : 'MODULES_HAVE_ERRORS');\"",
+            "expected": "ALL_MODULES_OK printed with no errors"
+          },
+          "status": "completed"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 11,
+    "services_involved": [
+      "esocial-auto"
+    ],
+    "implementation_order": [
+      "Phase 1: Foundation (package.json, .env.example, .gitignore, logger) — no dependencies",
+      "Phase 2: Authentication (govbr.js, client.js) — depends on Phase 1",
+      "Phase 3: Business Logic (folha.js, guia.js) — depends on Phase 2",
+      "Phase 4: Notifications (email.js, whatsapp.js) — depends on Phase 1 ONLY (parallel with Phase 2+3)",
+      "Phase 5: Orchestration (monthly.js, index.js) — depends on Phase 3 AND Phase 4",
+      "Phase 6: Integration (verification) — depends on Phase 5"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-2-authentication",
+            "phase-4-notifications"
+          ],
+          "reason": "Both depend only on phase-1-foundation. Phase 2 creates auth/esocial modules while Phase 4 creates notification modules — completely different file sets with no overlap."
+        },
+        {
+          "phases": [
+            "phase-3-business-logic",
+            "phase-4-notifications"
+          ],
+          "reason": "Phase 3 depends on Phase 2 (not Phase 4) and Phase 4 depends on Phase 1 (not Phase 2/3). If Phase 4 is still in progress when Phase 3 starts, they can run concurrently."
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.4x faster than sequential — Phases 2+4 run in parallel, then Phase 3 may overlap with Phase 4 tail"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 001 --parallel 2"
+  },
+  "verification_strategy": {
+    "risk_level": "high",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit",
+      "integration",
+      "e2e"
+    ],
+    "security_scanning_required": true,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All 12 project files created and functional",
+      "npm install completes without errors",
+      "All 8 source modules load without circular dependency errors",
+      "axios pinned to exactly 1.15.0 (npm ls axios confirms)",
+      "No sensitive data (CPF, password, tokens) appears in any log output",
+      "node index.js --run-now parses flag correctly",
+      ".gitignore excludes node_modules, .env, logs/, output/, session.json, .wwebjs_auth/",
+      "Each module exports the expected public API functions",
+      "Logger writes to both console and logs/ directory",
+      "package.json scripts (start, dev, setup, run-now) are correctly configured"
+    ],
+    "verification_steps": [
+      {
+        "name": "Module Load Test",
+        "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"['./src/utils/logger','./src/auth/govbr','./src/esocial/client','./src/esocial/folha','./src/esocial/guia','./src/notifications/email','./src/notifications/whatsapp','./src/jobs/monthly'].forEach(m => require(m)); console.log('ALL_OK');\"",
+        "expected_outcome": "ALL_OK — all modules load without errors",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Dependency Security Check",
+        "command": "cd /home/rlmit/workspace/esocial-auto && npm ls axios 2>/dev/null | grep axios && npm audit --json 2>/dev/null | node -e \"const d=require('fs').readFileSync('/dev/stdin','utf8'); const a=JSON.parse(d); console.log('vulnerabilities:', a.metadata?.vulnerabilities?.critical || 0, 'critical');\"",
+        "expected_outcome": "axios@1.15.0 confirmed, 0 critical vulnerabilities",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Secrets Scan in Source Files",
+        "command": "cd /home/rlmit/workspace/esocial-auto && grep -rn 'GOVBR_SENHA\\|password.*=.*[\"'\\'']\\'\\''\\|senha.*=.*[\"'\\'']\\'\\'' src/ index.js --include='*.js' | grep -v 'process.env' | grep -v '//' | head -5 || echo 'NO_HARDCODED_SECRETS'",
+        "expected_outcome": "NO_HARDCODED_SECRETS — all secrets loaded from process.env only",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Package.json Validation",
+        "command": "cd /home/rlmit/workspace/esocial-auto && node -e \"const p=require('./package.json'); console.log('axios:', p.dependencies.axios); console.log('engines:', p.engines.node); console.log('scripts:', Object.keys(p.scripts).join(','));\"",
+        "expected_outcome": "axios: 1.15.0, engines: >=18, scripts: start,dev,setup,run-now",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "High-risk due to handling government credentials (CPF, passwords, session tokens) and interacting with undocumented eSocial APIs. Security scan verifies no credentials leak in source code. Module load tests verify structural correctness without requiring live credentials. Full E2E testing requires real gov.br account and is manual."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "node -e \"require('./src/utils/logger').info('test')\"",
+        "node -e \"const {getCompetencia} = require('./src/jobs/monthly'); console.log(getCompetencia());\""
+      ],
+      "minimum_coverage": null,
+      "notes": "No automated test framework — unit verification via direct module execution. Live credential tests are manual."
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "node -e \"['./src/utils/logger','./src/auth/govbr','./src/esocial/client','./src/esocial/folha','./src/esocial/guia','./src/notifications/email','./src/notifications/whatsapp','./src/jobs/monthly'].forEach(m => require(m)); console.log('ALL_OK');\""
+      ],
+      "services_to_test": [
+        "esocial-auto"
+      ],
+      "notes": "Full integration testing (auth → close → DAE → notify) requires valid gov.br credentials and SMTP setup. Structural integration (all modules load, no circular deps) is automated."
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [
+        "node index.js --run-now"
+      ],
+      "flows": [
+        "full-job-happy-path",
+        "payroll-already-closed",
+        "session-reuse",
+        "error-notification"
+      ],
+      "notes": "Requires live gov.br credentials, SMTP server, and paired WhatsApp. Cannot be automated in CI."
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": [],
+      "notes": "No web UI — this is a CLI/headless background job"
+    },
+    "database_verification": {
+      "required": false,
+      "checks": [],
+      "notes": "No database — file-based storage only (session.json, PDFs, logs)"
+    },
+    "file_system_verification": {
+      "required": true,
+      "checks": [
+        "output/guias/ directory exists or is created at runtime",
+        "logs/ directory exists or is created at runtime",
+        ".gitignore excludes node_modules, .env, logs/, output/, session.json, .wwebjs_auth/",
+        "package.json exists with correct dependencies",
+        ".env.example exists with all 14 environment variables documented"
+      ]
+    }
+  },
+  "qa_signoff": null,
+  "status": "human_review",
+  "planStatus": "review",
+  "xstateState": "human_review",
+  "executionPhase": "complete",
+  "updated_at": "2026-04-09T10:19:15.796Z",
+  "lastEvent": {
+    "eventId": "3e48cf7e-4c75-43ca-ba04-588aa99fbfeb",
+    "sequence": 0,
+    "type": "PLANNING_COMPLETE",
+    "timestamp": "2026-04-09T10:02:43.599744+00:00"
+  },
+  "last_updated": "2026-04-09T10:09:32.517966+00:00",
+  "reviewReason": "completed"
+}

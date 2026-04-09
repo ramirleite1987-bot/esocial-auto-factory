@@ -14,4 +14,8 @@ logs/
 output/
 
 # WhatsApp session data
+.wwebjs_auth/
 sessions/
+
+# Session file
+session.json

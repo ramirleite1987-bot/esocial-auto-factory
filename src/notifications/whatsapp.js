@@ -2,7 +2,7 @@
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const logger = require('../utils/logger').child('whatsapp');
+const logger = require('../utils/logger').child({ context: 'whatsapp' });
 
 let client = null;
 

@@ -1,7 +1,7 @@
 'use strict';
 
 const nodemailer = require('nodemailer');
-const logger = require('../utils/logger').child('email');
+const logger = require('../utils/logger').child({ context: 'email' });
 
 let transporter = null;
 

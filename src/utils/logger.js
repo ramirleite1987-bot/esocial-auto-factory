@@ -71,21 +71,15 @@ const logger = winston.createLogger({
  * @param {string} context - Context label (e.g. module name)
  * @returns {winston.Logger}
  */
-logger.child = (context) =>
-  logger.child ? Object.create(logger, {
-    info: { value: (msg, meta) => logger.info(msg, { context, ...meta }) },
-    warn: { value: (msg, meta) => logger.warn(msg, { context, ...meta }) },
-    error: { value: (msg, meta) => logger.error(msg, { context, ...meta }) },
-    debug: { value: (msg, meta) => logger.debug(msg, { context, ...meta }) },
-  }) : logger;
-
-// Override child to avoid recursion — simple context wrapper
-logger.child = function createChild(context) {
+// Child logger — simple context wrapper — simple context wrapper
+// Accepts either a string or { context: string } for compatibility
+logger.child = function createChild(opts) {
+  const ctx = typeof opts === 'object' && opts !== null ? opts.context : opts;
   return {
-    info: (msg, meta) => logger.info(msg, { context, ...meta }),
-    warn: (msg, meta) => logger.warn(msg, { context, ...meta }),
-    error: (msg, meta) => logger.error(msg, { context, ...meta }),
-    debug: (msg, meta) => logger.debug(msg, { context, ...meta }),
+    info: (msg, meta) => logger.info(msg, { context: ctx, ...meta }),
+    warn: (msg, meta) => logger.warn(msg, { context: ctx, ...meta }),
+    error: (msg, meta) => logger.error(msg, { context: ctx, ...meta }),
+    debug: (msg, meta) => logger.debug(msg, { context: ctx, ...meta }),
   };
 };
 
