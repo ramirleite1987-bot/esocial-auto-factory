@@ -1,0 +1,92 @@
+'use strict';
+
+const winston = require('winston');
+const DailyRotateFile = require('winston-daily-rotate-file');
+const path = require('path');
+
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const LOG_DIR = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
+
+const SENSITIVE_KEYS = ['password', 'senha', 'token', 'secret', 'cpf', 'authorization', 'cookie'];
+
+function redactSensitive(info) {
+  if (typeof info.message === 'object' && info.message !== null) {
+    const sanitized = { ...info.message };
+    for (const key of Object.keys(sanitized)) {
+      if (SENSITIVE_KEYS.some((s) => key.toLowerCase().includes(s))) {
+        sanitized[key] = '[REDACTED]';
+      }
+    }
+    info.message = sanitized;
+  }
+  return info;
+}
+
+const logFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format((info) => redactSensitive(info))(),
+  winston.format.printf(({ timestamp, level, context, message }) => {
+    const ctx = context ? ` [${context}]` : '';
+    const msg = typeof message === 'object' ? JSON.stringify(message) : message;
+    return `[${timestamp}] [${level.toUpperCase()}]${ctx} ${msg}`;
+  }),
+);
+
+const fileTransport = new DailyRotateFile({
+  dirname: LOG_DIR,
+  filename: 'app-%DATE%.log',
+  datePattern: 'YYYY-MM-DD',
+  maxFiles: '30d',
+  level: LOG_LEVEL,
+  format: logFormat,
+});
+
+fileTransport.on('error', (err) => {
+  // eslint-disable-next-line no-console
+  console.error('Logger file transport error:', err);
+});
+
+const consoleTransport = new winston.transports.Console({
+  level: LOG_LEVEL,
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format((info) => redactSensitive(info))(),
+    winston.format.colorize({ all: true }),
+    winston.format.printf(({ timestamp, level, context, message }) => {
+      const ctx = context ? ` [${context}]` : '';
+      const msg = typeof message === 'object' ? JSON.stringify(message) : message;
+      return `[${timestamp}] [${level}]${ctx} ${msg}`;
+    }),
+  ),
+});
+
+const logger = winston.createLogger({
+  level: LOG_LEVEL,
+  transports: [fileTransport, consoleTransport],
+  exitOnError: false,
+});
+
+/**
+ * Create a child logger with a fixed context label.
+ * @param {string} context - Context label (e.g. module name)
+ * @returns {winston.Logger}
+ */
+logger.child = (context) =>
+  logger.child ? Object.create(logger, {
+    info: { value: (msg, meta) => logger.info(msg, { context, ...meta }) },
+    warn: { value: (msg, meta) => logger.warn(msg, { context, ...meta }) },
+    error: { value: (msg, meta) => logger.error(msg, { context, ...meta }) },
+    debug: { value: (msg, meta) => logger.debug(msg, { context, ...meta }) },
+  }) : logger;
+
+// Override child to avoid recursion — simple context wrapper
+logger.child = function createChild(context) {
+  return {
+    info: (msg, meta) => logger.info(msg, { context, ...meta }),
+    warn: (msg, meta) => logger.warn(msg, { context, ...meta }),
+    error: (msg, meta) => logger.error(msg, { context, ...meta }),
+    debug: (msg, meta) => logger.debug(msg, { context, ...meta }),
+  };
+};
+
+module.exports = logger;
