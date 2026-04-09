@@ -1,0 +1,16 @@
+[
+  {
+    "id": "empregador-1",
+    "nome": "Maria da Silva",
+    "cpf": "00012345678",
+    "competencia": {
+      "mes": "05",
+      "ano": "2024"
+    },
+    "jobDiaFechamento": 7,
+    "email": "seuemail@gmail.com",
+    "whatsapp": "+5598999999999",
+    "ativo": true,
+    "observacoes": "Perfil principal — único empregador suportado no MVP"
+  }
+]
