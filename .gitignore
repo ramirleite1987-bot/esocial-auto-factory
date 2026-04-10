@@ -1,0 +1,21 @@
+# Auto Claude data directory
+.auto-claude/
+
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+logs/
+
+# Output files
+output/
+
+# WhatsApp session data
+.wwebjs_auth/
+sessions/
+
+# Session file
+session.json
