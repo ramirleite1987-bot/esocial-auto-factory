@@ -42,7 +42,6 @@ const fileTransport = new DailyRotateFile({
 });
 
 fileTransport.on('error', (err) => {
-  // eslint-disable-next-line no-console
   console.error('Logger file transport error:', err);
 });
 
@@ -68,19 +67,23 @@ const logger = winston.createLogger({
 
 /**
  * Create a child logger with a fixed context label.
- * @param {string} context - Context label (e.g. module name)
- * @returns {winston.Logger}
+ * Accepts either a string or { context: string } for compatibility.
+ * @param {string|{context:string}} opts - Context label or options object
+ * @returns {{ info: Function, warn: Function, error: Function, debug: Function }}
  */
-// Child logger — simple context wrapper — simple context wrapper
-// Accepts either a string or { context: string } for compatibility
 logger.child = function createChild(opts) {
   const ctx = typeof opts === 'object' && opts !== null ? opts.context : opts;
-  return {
+  const child = {
     info: (msg, meta) => logger.info(msg, { context: ctx, ...meta }),
     warn: (msg, meta) => logger.warn(msg, { context: ctx, ...meta }),
     error: (msg, meta) => logger.error(msg, { context: ctx, ...meta }),
     debug: (msg, meta) => logger.debug(msg, { context: ctx, ...meta }),
   };
+  child.child = (childOpts) => {
+    const childCtx = typeof childOpts === 'object' && childOpts !== null ? childOpts.context : childOpts;
+    return createChild({ context: `${ctx}:${childCtx}` });
+  };
+  return child;
 };
 
 module.exports = logger;

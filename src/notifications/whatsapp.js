@@ -5,6 +5,7 @@ const qrcode = require('qrcode-terminal');
 const logger = require('../utils/logger').child({ context: 'whatsapp' });
 
 let client = null;
+let isReady = false;
 
 /**
  * Resolve the Chromium executable path bundled with Playwright.
@@ -51,10 +52,12 @@ async function initWhatsApp() {
     });
 
     client.on('ready', () => {
+      isReady = true;
       logger.info('WhatsApp client is ready');
     });
 
     client.on('disconnected', (reason) => {
+      isReady = false;
       logger.warn(`WhatsApp client disconnected: ${reason}`);
       logger.info('Please re-scan the QR code on next initialization');
     });
@@ -76,6 +79,7 @@ async function initWhatsApp() {
   } catch (err) {
     logger.error(`Failed to initialize WhatsApp client: ${err.message}`);
     client = null;
+    isReady = false;
   }
 }
 
@@ -94,6 +98,11 @@ async function sendWhatsApp(number, message) {
 
     if (!client) {
       logger.error('WhatsApp client unavailable — skipping message');
+      return;
+    }
+
+    if (!isReady) {
+      logger.warn('WhatsApp client not ready yet — skipping message');
       return;
     }
 
