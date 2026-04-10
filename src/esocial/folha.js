@@ -1,33 +1,7 @@
 'use strict';
 
 const logger = require('../utils/logger').child({ context: 'esocial-folha' });
-
-/**
- * Auto-calculate competência (previous month) when env vars are set to 'auto'.
- * Handles January → December year rollback.
- *
- * @returns {{ mes: number, ano: number }}
- */
-function calcularCompetencia() {
-  const mesEnv = process.env.COMPETENCIA_MES;
-  const anoEnv = process.env.COMPETENCIA_ANO;
-
-  if (mesEnv && mesEnv !== 'auto' && anoEnv && anoEnv !== 'auto') {
-    return { mes: Number(mesEnv), ano: Number(anoEnv) };
-  }
-
-  const now = new Date();
-  let mes = now.getMonth(); // 0-indexed = previous month (current - 1)
-  let ano = now.getFullYear();
-
-  if (mes === 0) {
-    mes = 12;
-    ano -= 1;
-  }
-
-  logger.info(`Competência auto-calculada: ${String(mes).padStart(2, '0')}/${ano}`);
-  return { mes, ano };
-}
+const { getCompetencia } = require('../utils/competencia');
 
 /**
  * List open (pending) payrolls.
@@ -57,7 +31,7 @@ async function listarFolhasAbertas(client) {
  * @returns {Promise<Object>} Competency status object
  */
 async function verificarCompetencia(client, competencia) {
-  const { mes, ano } = competencia || calcularCompetencia();
+  const { mes, ano } = competencia || getCompetencia();
   const periodo = `${String(mes).padStart(2, '0')}/${ano}`;
   logger.info(`Verificando competência ${periodo}`);
 
@@ -79,7 +53,7 @@ async function verificarCompetencia(client, competencia) {
  * @returns {Promise<Object>} Closure result
  */
 async function encerrarFolha(client, competencia) {
-  const { mes, ano } = competencia || calcularCompetencia();
+  const { mes, ano } = competencia || getCompetencia();
   const periodo = `${String(mes).padStart(2, '0')}/${ano}`;
   logger.info(`Encerrando folha de pagamento para ${periodo}`);
 

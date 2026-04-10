@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
 const logger = require('../utils/logger').child({ context: 'monthly-job' });
+const { getCompetencia } = require('../utils/competencia');
 const { authenticate } = require('../auth/govbr');
 const { createClient } = require('../esocial/client');
 const { listarFolhasAbertas, verificarCompetencia, encerrarFolha } = require('../esocial/folha');
@@ -13,33 +14,6 @@ const { sendWhatsApp } = require('../notifications/whatsapp');
 
 const LOCK_FILE = '/tmp/esocial-auto.lock';
 const GUIAS_DIR = path.resolve(__dirname, '../../output/guias');
-
-/**
- * Auto-calculate competência (previous month).
- * Handles January → December year rollback.
- *
- * @returns {{ mes: number, ano: number }}
- */
-function getCompetencia() {
-  const mesEnv = process.env.COMPETENCIA_MES;
-  const anoEnv = process.env.COMPETENCIA_ANO;
-
-  if (mesEnv && mesEnv !== 'auto' && anoEnv && anoEnv !== 'auto') {
-    return { mes: Number(mesEnv), ano: Number(anoEnv) };
-  }
-
-  const now = new Date();
-  let mes = now.getMonth(); // 0-indexed = previous month
-  let ano = now.getFullYear();
-
-  if (mes === 0) {
-    mes = 12;
-    ano -= 1;
-  }
-
-  logger.info(`Competência auto-calculada: ${String(mes).padStart(2, '0')}/${ano}`);
-  return { mes, ano };
-}
 
 /**
  * Acquire a file lock to prevent concurrent runs.
