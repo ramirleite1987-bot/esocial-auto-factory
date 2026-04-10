@@ -60,8 +60,10 @@ async function main() {
   const competenciaAno = process.env.COMPETENCIA_ANO || 'auto';
   logger.info(`Competência target: ${competenciaMes}/${competenciaAno}`);
 
-  // Initialize WhatsApp client and wait for ready
-  await initWhatsApp();
+  // Fire-and-forget WhatsApp init — must not block cron/job startup
+  initWhatsApp().catch((err) => {
+    logger.error(`WhatsApp init error (non-fatal): ${err.message}`);
+  });
 
   // Set up cron job
   setupCron();

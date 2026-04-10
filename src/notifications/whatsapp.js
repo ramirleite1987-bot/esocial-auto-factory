@@ -63,7 +63,16 @@ async function initWhatsApp() {
       logger.error(`WhatsApp authentication failure: ${msg}`);
     });
 
-    await client.initialize();
+    const INIT_TIMEOUT_MS = 30_000;
+    await Promise.race([
+      client.initialize(),
+      new Promise((resolve) => {
+        setTimeout(() => {
+          logger.warn('WhatsApp init timed out after 30s — continuing in background');
+          resolve();
+        }, INIT_TIMEOUT_MS);
+      }),
+    ]);
   } catch (err) {
     logger.error(`Failed to initialize WhatsApp client: ${err.message}`);
     client = null;
