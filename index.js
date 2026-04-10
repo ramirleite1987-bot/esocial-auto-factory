@@ -28,7 +28,7 @@ function validateCron() {
   let schedule = process.env.CRON_SCHEDULE;
 
   if (!schedule && process.env.JOB_DIA_FECHAMENTO) {
-    const day = parseInt(process.env.JOB_DIA_FECHAMENTO, 10);
+    const day = Number(process.env.JOB_DIA_FECHAMENTO);
     schedule = `0 8 ${day} * *`;
   }
 
@@ -66,7 +66,7 @@ async function main() {
   });
 
   // Set up cron job
-  setupCron();
+  setupCron(schedule);
   logger.info('Cron job configured');
 
   if (runNow) {

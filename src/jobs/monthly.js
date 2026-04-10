@@ -216,10 +216,15 @@ function buildCronFromDay(day) {
  * Uses CRON_SCHEDULE env var or builds from JOB_DIA_FECHAMENTO.
  * Timezone: America/Sao_Paulo.
  *
+ * @param {string} [cronExpression] - Pre-validated cron expression; if omitted, re-derives from env vars.
  * @returns {import('node-cron').ScheduledTask}
  */
-function setupCron() {
-  let schedule = process.env.CRON_SCHEDULE;
+function setupCron(cronExpression) {
+  let schedule = cronExpression;
+
+  if (!schedule) {
+    schedule = process.env.CRON_SCHEDULE;
+  }
 
   if (!schedule && process.env.JOB_DIA_FECHAMENTO) {
     schedule = buildCronFromDay(process.env.JOB_DIA_FECHAMENTO);
