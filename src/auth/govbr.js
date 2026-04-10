@@ -37,9 +37,12 @@ function loadPersistedSession() {
     }
 
     const now = Date.now() / 1000;
-    const hasExpired = state.cookies.every((c) => c.expires && c.expires > 0 && c.expires < now);
+    const realCookies = state.cookies.filter((c) => c.expires && c.expires > 0);
+    const hasExpired =
+      realCookies.length === 0 ||
+      realCookies.some((c) => c.expires < now);
     if (hasExpired) {
-      logger.warn('All persisted session cookies have expired, will re-authenticate');
+      logger.warn('Persisted session cookies have expired or are all session-only, will re-authenticate');
       return { valid: false };
     }
 

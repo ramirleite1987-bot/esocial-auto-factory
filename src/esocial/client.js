@@ -1,8 +1,12 @@
 'use strict';
 
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const { authenticate } = require('../auth/govbr');
 const logger = require('../utils/logger').child({ context: 'esocial-client' });
+
+const SESSION_PATH = path.join(process.cwd(), 'session.json');
 
 const BASE_URL = 'https://login.esocial.gov.br';
 const TIMEOUT = 30000;
@@ -31,6 +35,11 @@ function createClient(session) {
       if ((status === 401 || status === 403) && !error.config._retried) {
         error.config._retried = true;
         logger.warn(`Received ${status}, attempting re-authentication`);
+
+        if (fs.existsSync(SESSION_PATH)) {
+          fs.unlinkSync(SESSION_PATH);
+          logger.info('Deleted stale session.json to force browser re-login');
+        }
 
         const newSession = await authenticate();
         error.config.headers.Cookie = newSession;
