@@ -5,6 +5,7 @@ require('dotenv').config();
 const logger = require('./src/utils/logger').child({ context: 'main' });
 const { initWhatsApp } = require('./src/notifications/whatsapp');
 const { runJob, setupCron } = require('./src/jobs/monthly');
+const { startHealthServer } = require('./src/health');
 
 const REQUIRED_ENV_VARS = ['GOVBR_CPF', 'GOVBR_SENHA'];
 
@@ -64,6 +65,9 @@ async function main() {
   initWhatsApp().catch((err) => {
     logger.error(`WhatsApp init error (non-fatal): ${err.message}`);
   });
+
+  // Start health check server (if enabled)
+  startHealthServer();
 
   // Set up cron job
   setupCron(schedule);

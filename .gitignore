@@ -19,3 +19,6 @@ sessions/
 
 # Session file
 session.json
+
+# Test coverage
+coverage/

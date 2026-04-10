@@ -11,9 +11,53 @@ const { listarFolhasAbertas, verificarCompetencia, encerrarFolha } = require('..
 const { gerarGuia, downloadGuiaPDF } = require('../esocial/guia');
 const { sendEmail } = require('../notifications/email');
 const { sendWhatsApp } = require('../notifications/whatsapp');
+const { recordJobRun } = require('../health');
 
 const LOCK_FILE = '/tmp/esocial-auto.lock';
 const GUIAS_DIR = path.resolve(__dirname, '../../output/guias');
+const MAX_RETRIES = Number(process.env.JOB_MAX_RETRIES) || 3;
+const RETRY_BASE_DELAY_MS = 2000;
+
+/**
+ * Sleep for a given number of milliseconds.
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Execute an async function with retry and exponential backoff.
+ * @param {Function} fn - Async function to execute
+ * @param {string} label - Description for logging
+ * @param {number} [maxRetries=MAX_RETRIES] - Maximum number of retries
+ * @returns {Promise<*>} Result of fn()
+ */
+async function withRetry(fn, label, maxRetries = MAX_RETRIES) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const status = err.response ? err.response.status : null;
+
+      // Don't retry on client errors (4xx) except 408 (timeout) and 429 (rate limit)
+      if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+        throw err;
+      }
+
+      if (attempt < maxRetries) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        logger.warn(`${label} falhou (tentativa ${attempt}/${maxRetries}): ${err.message}. Retentando em ${delay}ms...`);
+        await sleep(delay);
+      }
+    }
+  }
+  logger.error(`${label} falhou após ${maxRetries} tentativas`);
+  throw lastError;
+}
 
 /**
  * Acquire a file lock to prevent concurrent runs.
@@ -82,9 +126,9 @@ async function runJob() {
   acquireLock();
 
   try {
-    // Step 1: Authenticate
+    // Step 1: Authenticate (with retry)
     logger.info('Autenticando via gov.br...');
-    const session = await authenticate();
+    const session = await withRetry(() => authenticate(), 'Autenticação gov.br');
     logger.info('Autenticação concluída');
 
     // Step 2: Create HTTP client
@@ -95,21 +139,21 @@ async function runJob() {
     const periodo = `${String(competencia.mes).padStart(2, '0')}/${competencia.ano}`;
     logger.info(`Competência alvo: ${periodo}`);
 
-    // Step 4: List and verify payroll
-    const folhas = await listarFolhasAbertas(client);
+    // Step 4: List and verify payroll (with retry)
+    const folhas = await withRetry(() => listarFolhasAbertas(client), 'Listar folhas');
     logger.info(`Folhas abertas: ${folhas.length}`);
 
-    await verificarCompetencia(client, competencia);
+    await withRetry(() => verificarCompetencia(client, competencia), 'Verificar competência');
 
-    // Step 5: Close payroll
-    const resultado = await encerrarFolha(client, competencia);
+    // Step 5: Close payroll (with retry)
+    const resultado = await withRetry(() => encerrarFolha(client, competencia), 'Encerrar folha');
     logger.info(`Resultado encerramento: ${JSON.stringify(resultado)}`);
 
-    // Step 6: Generate DAE and download PDF
-    const guiaId = await gerarGuia(client, competencia);
+    // Step 6: Generate DAE and download PDF (with retry)
+    const guiaId = await withRetry(() => gerarGuia(client, competencia), 'Gerar guia DAE');
     const pdfFilename = `DAE-${String(competencia.mes).padStart(2, '0')}-${competencia.ano}.pdf`;
     const pdfPath = path.join(GUIAS_DIR, pdfFilename);
-    await downloadGuiaPDF(client, guiaId, pdfPath);
+    await withRetry(() => downloadGuiaPDF(client, guiaId, pdfPath), 'Download PDF');
 
     // Step 7: Send success email with PDF
     try {
@@ -137,6 +181,7 @@ async function runJob() {
       logger.error(`Falha ao enviar WhatsApp de sucesso: ${waErr.message}`);
     }
 
+    recordJobRun('success');
     logger.info('=== Job mensal concluído com sucesso ===');
   } catch (error) {
     logger.error(`Erro no job mensal: ${error.message}`);
@@ -164,6 +209,7 @@ async function runJob() {
       logger.error(`Falha ao enviar WhatsApp de erro: ${waErr.message}`);
     }
 
+    recordJobRun('error');
     throw error;
   } finally {
     releaseLock();
@@ -228,4 +274,4 @@ function setupCron(cronExpression) {
   return task;
 }
 
-module.exports = { runJob, setupCron, getCompetencia };
+module.exports = { runJob, setupCron };

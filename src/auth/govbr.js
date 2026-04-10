@@ -7,7 +7,6 @@ const logger = require('../utils/logger').child({ context: 'auth' });
 
 const SESSION_PATH = path.join(process.cwd(), 'session.json');
 const LOGIN_URL = 'https://login.esocial.gov.br';
-const ESOCIAL_DASHBOARD_URL = 'https://login.esocial.gov.br/esocial';
 
 /**
  * Build a cookie header string from Playwright storage state cookies.
