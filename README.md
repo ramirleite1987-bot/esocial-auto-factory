@@ -137,13 +137,14 @@ npm run lint
 
 ## Health Check
 
-Quando `HEALTH_ENABLED=true`, um endpoint HTTP fica disponivel:
+Quando `HEALTH_ENABLED=true`, dois endpoints HTTP ficam disponiveis:
 
 ```bash
 curl http://localhost:3000/health
+curl http://localhost:3000/metrics
 ```
 
-Retorna:
+`/health` retorna JSON:
 ```json
 {
   "status": "ok",
@@ -151,8 +152,20 @@ Retorna:
   "nodeVersion": "v20.0.0",
   "lastJobRun": "2025-03-07T08:00:00.000Z",
   "lastJobStatus": "success",
+  "jobRunsTotal": { "success": 12, "error": 1 },
   "timestamp": "2025-03-07T12:00:00.000Z"
 }
+```
+
+`/metrics` retorna metricas em formato texto Prometheus, prontas para scrape:
+```
+# TYPE esocial_uptime_seconds gauge
+esocial_uptime_seconds 3600
+# TYPE esocial_job_runs_total counter
+esocial_job_runs_total{status="success"} 12
+esocial_job_runs_total{status="error"} 1
+# TYPE esocial_last_job_timestamp_seconds gauge
+esocial_last_job_timestamp_seconds 1709798400
 ```
 
 ## Fluxo do Job Mensal

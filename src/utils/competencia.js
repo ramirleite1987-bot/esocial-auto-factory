@@ -2,9 +2,34 @@
 
 const logger = require('./logger').child({ context: 'competencia' });
 
+const MIN_YEAR = 2000;
+
+function parseManualMes(value) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 12) {
+    throw new Error(
+      `COMPETENCIA_MES inválido: "${value}" (esperado inteiro entre 1 e 12 ou "auto")`,
+    );
+  }
+  return n;
+}
+
+function parseManualAno(value) {
+  const n = Number(value);
+  const maxYear = new Date().getFullYear() + 1;
+  if (!Number.isInteger(n) || n < MIN_YEAR || n > maxYear) {
+    throw new Error(
+      `COMPETENCIA_ANO inválido: "${value}" (esperado inteiro entre ${MIN_YEAR} e ${maxYear} ou "auto")`,
+    );
+  }
+  return n;
+}
+
 /**
- * Auto-calculate competência (previous month) when env vars are set to 'auto'.
- * Handles January → December year rollback.
+ * Auto-calculate competência (previous month) when env vars are unset or 'auto'.
+ * Validates manual values strictly: COMPETENCIA_MES must be 1-12,
+ * COMPETENCIA_ANO must be between 2000 and currentYear+1. Throws on invalid input.
+ * Supports partial config (e.g., manual mes + auto ano).
  *
  * @returns {{ mes: number, ano: number }}
  */
@@ -12,8 +37,11 @@ function getCompetencia() {
   const mesEnv = process.env.COMPETENCIA_MES;
   const anoEnv = process.env.COMPETENCIA_ANO;
 
-  if (mesEnv && mesEnv !== 'auto' && anoEnv && anoEnv !== 'auto') {
-    return { mes: Number(mesEnv), ano: Number(anoEnv) };
+  const mesIsManual = mesEnv && mesEnv !== 'auto';
+  const anoIsManual = anoEnv && anoEnv !== 'auto';
+
+  if (mesIsManual && anoIsManual) {
+    return { mes: parseManualMes(mesEnv), ano: parseManualAno(anoEnv) };
   }
 
   const now = new Date();
@@ -25,7 +53,14 @@ function getCompetencia() {
     ano -= 1;
   }
 
-  logger.info(`Competência auto-calculada: ${String(mes).padStart(2, '0')}/${ano}`);
+  if (mesIsManual) {
+    mes = parseManualMes(mesEnv);
+  }
+  if (anoIsManual) {
+    ano = parseManualAno(anoEnv);
+  }
+
+  logger.info(`Competência calculada: ${String(mes).padStart(2, '0')}/${ano}`);
   return { mes, ano };
 }
 
