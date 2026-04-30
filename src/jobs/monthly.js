@@ -12,6 +12,7 @@ const { gerarGuia, downloadGuiaPDF } = require('../esocial/guia');
 const { sendEmail } = require('../notifications/email');
 const { sendWhatsApp } = require('../notifications/whatsapp');
 const { recordJobRun } = require('../health');
+const { appendRun } = require('../utils/auditLog');
 
 const LOCK_FILE = '/tmp/esocial-auto.lock';
 const GUIAS_DIR = path.resolve(__dirname, '../../output/guias');
@@ -122,6 +123,9 @@ function releaseLock() {
  */
 async function runJob() {
   logger.info('=== Iniciando job mensal eSocial ===');
+  const startedAt = Date.now();
+  let periodo = null;
+  let pdfPath = null;
 
   acquireLock();
 
@@ -136,7 +140,7 @@ async function runJob() {
 
     // Step 3: Calculate competência
     const competencia = getCompetencia();
-    const periodo = `${String(competencia.mes).padStart(2, '0')}/${competencia.ano}`;
+    periodo = `${String(competencia.mes).padStart(2, '0')}/${competencia.ano}`;
     logger.info(`Competência alvo: ${periodo}`);
 
     // Step 4: List and verify payroll (with retry)
@@ -152,7 +156,7 @@ async function runJob() {
     // Step 6: Generate DAE and download PDF (with retry)
     const guiaId = await withRetry(() => gerarGuia(client, competencia), 'Gerar guia DAE');
     const pdfFilename = `DAE-${String(competencia.mes).padStart(2, '0')}-${competencia.ano}.pdf`;
-    const pdfPath = path.join(GUIAS_DIR, pdfFilename);
+    pdfPath = path.join(GUIAS_DIR, pdfFilename);
     await withRetry(() => downloadGuiaPDF(client, guiaId, pdfPath), 'Download PDF');
 
     // Step 7: Send success email with PDF
@@ -182,6 +186,12 @@ async function runJob() {
     }
 
     recordJobRun('success');
+    appendRun({
+      status: 'success',
+      periodo,
+      pdfPath,
+      durationMs: Date.now() - startedAt,
+    });
     logger.info('=== Job mensal concluído com sucesso ===');
   } catch (error) {
     logger.error(`Erro no job mensal: ${error.message}`);
@@ -210,6 +220,12 @@ async function runJob() {
     }
 
     recordJobRun('error');
+    appendRun({
+      status: 'error',
+      periodo,
+      error: error.message,
+      durationMs: Date.now() - startedAt,
+    });
     throw error;
   } finally {
     releaseLock();

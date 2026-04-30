@@ -28,6 +28,8 @@ src/
   utils/
     logger.js               # Logger Winston com rotacao diaria
     competencia.js          # Calculo automatico de competencia
+    scheduleConfig.js       # Resolucao/validacao do cron schedule
+    auditLog.js             # Audit log JSON Lines (output/runs.jsonl)
   health.js                 # Health check HTTP endpoint
 ```
 
@@ -115,6 +117,7 @@ Na primeira execucao, um QR code sera exibido no terminal para vincular o WhatsA
 | `LOG_DIR` | `./logs` | Diretorio dos logs |
 | `HEALTH_ENABLED` | `false` | Ativar endpoint HTTP /health |
 | `HEALTH_PORT` | `3000` | Porta do health check |
+| `AUDIT_LOG_PATH` | `./output/runs.jsonl` | Caminho do audit log (JSON Lines) |
 
 ## Uso
 
@@ -177,9 +180,21 @@ logs/
 output/
   guias/
     DAE-03-2025.pdf         # Guias DAE geradas
+  runs.jsonl                # Audit log: uma linha JSON por execucao
 session.json                # Sessao gov.br persistida (gitignored)
 .wwebjs_auth/               # Sessao WhatsApp (gitignored)
 ```
+
+### Audit Log
+
+A cada execucao do job (sucesso ou falha) uma linha JSON e adicionada a `output/runs.jsonl`:
+
+```json
+{"timestamp":"2025-03-07T08:00:42.123Z","status":"success","periodo":"02/2025","pdfPath":"/app/output/guias/DAE-02-2025.pdf","durationMs":47213}
+{"timestamp":"2025-04-07T08:01:15.999Z","status":"error","periodo":"03/2025","error":"Network error","durationMs":12504}
+```
+
+Util para auditoria, debugging e estatisticas (ex: `jq -s 'group_by(.status) | map({status: .[0].status, count: length})' output/runs.jsonl`).
 
 ## Testes
 
