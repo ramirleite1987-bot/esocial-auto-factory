@@ -6,6 +6,7 @@ const logger = require('./src/utils/logger').child({ context: 'main' });
 const { initWhatsApp } = require('./src/notifications/whatsapp');
 const { runJob, setupCron } = require('./src/jobs/monthly');
 const { startHealthServer } = require('./src/health');
+const { resolveSchedule } = require('./src/utils/scheduleConfig');
 
 const REQUIRED_ENV_VARS = ['GOVBR_CPF', 'GOVBR_SENHA'];
 
@@ -21,30 +22,6 @@ function validateEnv() {
 }
 
 /**
- * Validate the cron expression at startup.
- * Uses node-cron's validate function.
- */
-function validateCron() {
-  const cron = require('node-cron');
-  let schedule = process.env.CRON_SCHEDULE;
-
-  if (!schedule && process.env.JOB_DIA_FECHAMENTO) {
-    const day = Number(process.env.JOB_DIA_FECHAMENTO);
-    schedule = `0 8 ${day} * *`;
-  }
-
-  if (!schedule) {
-    schedule = '0 8 7 * *';
-  }
-
-  if (!cron.validate(schedule)) {
-    throw new Error(`Invalid cron expression: ${schedule}`);
-  }
-
-  return schedule;
-}
-
-/**
  * Application entry point.
  */
 async function main() {
@@ -52,7 +29,7 @@ async function main() {
 
   // Validate environment and cron before anything else
   validateEnv();
-  const schedule = validateCron();
+  const schedule = resolveSchedule();
 
   logger.info(`eSocial Auto starting — Node.js ${process.version}`);
   logger.info(`Cron schedule: ${schedule}`);
