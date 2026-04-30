@@ -11,6 +11,7 @@ const { listarFolhasAbertas, verificarCompetencia, encerrarFolha } = require('..
 const { gerarGuia, downloadGuiaPDF } = require('../esocial/guia');
 const { sendEmail } = require('../notifications/email');
 const { sendWhatsApp } = require('../notifications/whatsapp');
+const { sendSlack } = require('../notifications/slack');
 const { recordJobRun } = require('../health');
 
 const LOCK_FILE = '/tmp/esocial-auto.lock';
@@ -181,6 +182,11 @@ async function runJob() {
       logger.error(`Falha ao enviar WhatsApp de sucesso: ${waErr.message}`);
     }
 
+    // Step 9: Send Slack success notification (no-op if not configured)
+    await sendSlack(
+      `:white_check_mark: *eSocial* — DAE ${periodo} gerada com sucesso. PDF: \`${pdfPath}\``,
+    );
+
     recordJobRun('success');
     logger.info('=== Job mensal concluído com sucesso ===');
   } catch (error) {
@@ -208,6 +214,11 @@ async function runJob() {
     } catch (waErr) {
       logger.error(`Falha ao enviar WhatsApp de erro: ${waErr.message}`);
     }
+
+    // Slack error notification (no-op if not configured)
+    await sendSlack(
+      `:rotating_light: *eSocial* — ERRO no job mensal: ${error.message}`,
+    );
 
     recordJobRun('error');
     throw error;

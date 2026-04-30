@@ -25,6 +25,7 @@ src/
   notifications/
     email.js                # Notificacoes via SMTP/Nodemailer
     whatsapp.js             # Notificacoes via WhatsApp Web
+    slack.js                # Notificacoes via Slack incoming webhook
   utils/
     logger.js               # Logger Winston com rotacao diaria
     competencia.js          # Calculo automatico de competencia
@@ -91,6 +92,15 @@ Copie `.env.example` para `.env` e configure:
 | `WHATSAPP_NUMBER` | Numero no formato internacional (ex: 5511999999999) |
 
 Na primeira execucao, um QR code sera exibido no terminal para vincular o WhatsApp.
+
+### Notificacoes Slack (opcional)
+
+| Variavel | Padrao | Descricao |
+|----------|--------|-----------|
+| `SLACK_WEBHOOK_URL` | - | URL de incoming webhook do Slack. Se ausente, Slack e desativado. |
+| `SLACK_TIMEOUT_MS` | `5000` | Timeout HTTP em ms para o POST do webhook |
+
+Quando configurado, mensagens de sucesso (com periodo + caminho do PDF) e de erro (com message do erro) sao enviadas para o canal vinculado ao webhook.
 
 ### Agendamento
 
