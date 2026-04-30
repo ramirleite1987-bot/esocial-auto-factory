@@ -109,6 +109,12 @@ Na primeira execucao, um QR code sera exibido no terminal para vincular o WhatsA
 | `COMPETENCIA_MES` | `auto` | Mes (1-12) ou 'auto' (mes anterior) |
 | `COMPETENCIA_ANO` | `auto` | Ano ou 'auto' |
 
+### Backup de PDF (opcional)
+
+| Variavel | Padrao | Descricao |
+|----------|--------|-----------|
+| `PDF_BACKUP_DIR` | - | Quando definido, cada DAE baixada e copiada para este diretorio (best-effort, falhas nao quebram o job) |
+
 ### Logging e Monitoramento
 
 | Variavel | Padrao | Descricao |
