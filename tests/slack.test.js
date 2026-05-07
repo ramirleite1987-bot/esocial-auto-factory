@@ -6,11 +6,18 @@ const axios = require('axios');
 const slack = require('../src/notifications/slack');
 
 const VALID_URL = 'https://hooks.slack.com/services/T000/B000/secret';
+const originalEnv = process.env;
 
 describe('slack notifications', () => {
   beforeEach(() => {
-    axios.post.mockReset();
+    process.env = { ...originalEnv };
     delete process.env.SLACK_WEBHOOK_URL;
+    delete process.env.SLACK_TIMEOUT_MS;
+    axios.post.mockReset();
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
   });
 
   describe('getWebhookUrl', () => {
@@ -64,38 +71,70 @@ describe('slack notifications', () => {
   });
 
   describe('sendSlack', () => {
-    test('skips when webhook URL is missing', async () => {
-      const result = await slack.sendSlack({ text: 'hi' });
+    test('returns false and skips POST when SLACK_WEBHOOK_URL is unset', async () => {
+      const result = await slack.sendSlack('hello');
       expect(result).toBe(false);
       expect(axios.post).not.toHaveBeenCalled();
     });
 
-    test('posts to the webhook URL with timeout and JSON header', async () => {
+    test('POSTs a text payload when called with a string', async () => {
       process.env.SLACK_WEBHOOK_URL = VALID_URL;
-      axios.post.mockResolvedValue({ status: 200, data: 'ok' });
+      axios.post.mockResolvedValue({ status: 200 });
 
-      const result = await slack.sendSlack({ text: 'hi' });
+      const result = await slack.sendSlack('hello world');
 
       expect(result).toBe(true);
       expect(axios.post).toHaveBeenCalledTimes(1);
-      const [calledUrl, calledBody, calledOpts] = axios.post.mock.calls[0];
-      expect(calledUrl).toBe(VALID_URL);
-      expect(calledBody).toEqual({ text: 'hi' });
-      expect(calledOpts.timeout).toBeGreaterThan(0);
-      expect(calledOpts.headers['Content-Type']).toBe('application/json');
+      const [url, body, config] = axios.post.mock.calls[0];
+      expect(url).toBe(VALID_URL);
+      expect(body).toEqual({ text: 'hello world' });
+      expect(config.timeout).toBe(5000);
+      expect(config.headers['Content-Type']).toBe('application/json');
     });
 
-    test('returns false on non-ok response', async () => {
+    test('forwards a Block Kit payload object as-is', async () => {
       process.env.SLACK_WEBHOOK_URL = VALID_URL;
-      axios.post.mockResolvedValue({ status: 200, data: 'invalid_payload' });
-      const result = await slack.sendSlack({ text: 'hi' });
-      expect(result).toBe(false);
+      axios.post.mockResolvedValue({ status: 200, data: 'ok' });
+
+      const payload = slack.buildPayload({ emoji: ':bell:', title: 'T', text: 'fallback' });
+      const result = await slack.sendSlack(payload);
+
+      expect(result).toBe(true);
+      const [, body] = axios.post.mock.calls[0];
+      expect(body).toBe(payload);
+      expect(body.text).toBe('fallback');
+    });
+
+    test('honors custom timeout from SLACK_TIMEOUT_MS', async () => {
+      process.env.SLACK_WEBHOOK_URL = VALID_URL;
+      process.env.SLACK_TIMEOUT_MS = '10000';
+      axios.post.mockResolvedValue({ status: 200 });
+
+      await slack.sendSlack('hi');
+
+      expect(axios.post.mock.calls[0][2].timeout).toBe(10000);
+    });
+
+    test('forwards optional username and iconEmoji', async () => {
+      process.env.SLACK_WEBHOOK_URL = VALID_URL;
+      axios.post.mockResolvedValue({ status: 200 });
+
+      await slack.sendSlack('hi', { username: 'eSocial Bot', iconEmoji: ':robot_face:' });
+
+      const body = axios.post.mock.calls[0][1];
+      expect(body).toEqual({
+        text: 'hi',
+        username: 'eSocial Bot',
+        icon_emoji: ':robot_face:',
+      });
     });
 
     test('swallows network errors and returns false', async () => {
       process.env.SLACK_WEBHOOK_URL = VALID_URL;
-      axios.post.mockRejectedValue(new Error('boom'));
-      const result = await slack.sendSlack({ text: 'hi' });
+      axios.post.mockRejectedValue(new Error('connect ETIMEDOUT'));
+
+      const result = await slack.sendSlack('boom');
+
       expect(result).toBe(false);
     });
   });

@@ -97,9 +97,10 @@ Na primeira execucao, um QR code sera exibido no terminal para vincular o WhatsA
 
 ### Notificacoes Slack (opcional)
 
-| Variavel | Descricao |
-|----------|-----------|
-| `SLACK_WEBHOOK_URL` | URL de Incoming Webhook do Slack (https://hooks.slack.com/services/...) |
+| Variavel | Padrao | Descricao |
+|----------|--------|-----------|
+| `SLACK_WEBHOOK_URL` | - | URL de Incoming Webhook do Slack (https://hooks.slack.com/services/...). Sem ela, Slack e desativado. |
+| `SLACK_TIMEOUT_MS` | `5000` | Timeout HTTP em ms para o POST do webhook |
 
 Para criar o webhook: https://api.slack.com/messaging/webhooks. Quando configurado, o sistema envia mensagens em Block Kit nos seguintes eventos:
 
@@ -123,6 +124,12 @@ Sem `SLACK_WEBHOOK_URL` configurado, as chamadas viram no-op.
 |----------|--------|-----------|
 | `COMPETENCIA_MES` | `auto` | Mes (1-12) ou 'auto' (mes anterior) |
 | `COMPETENCIA_ANO` | `auto` | Ano ou 'auto' |
+
+### Backup de PDF (opcional)
+
+| Variavel | Padrao | Descricao |
+|----------|--------|-----------|
+| `PDF_BACKUP_DIR` | - | Quando definido, cada DAE baixada e copiada para este diretorio (best-effort, falhas nao quebram o job) |
 
 ### Logging e Monitoramento
 

@@ -3,7 +3,7 @@
 const axios = require('axios');
 const logger = require('../utils/logger').child({ context: 'slack' });
 
-const WEBHOOK_TIMEOUT_MS = 10_000;
+const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
  * Resolve the Slack incoming webhook URL from the environment.
@@ -64,27 +64,55 @@ function buildPayload({ emoji, title, text, body, fields, channel }) {
 }
 
 /**
- * Post a payload to the configured Slack incoming webhook.
- * Best-effort — never throws. No-op when SLACK_WEBHOOK_URL is unset.
- * @param {object} payload - Slack webhook JSON payload
- * @returns {Promise<boolean>} true if the message was accepted by Slack
+ * Send a message to Slack via incoming webhook.
+ * Opt-in: no-op when SLACK_WEBHOOK_URL is unset. Best-effort — never throws.
+ *
+ * Polymorphic input:
+ *   - string  → simple text payload (supports Slack mrkdwn). `opts.username`
+ *               and `opts.iconEmoji` are forwarded as `username` / `icon_emoji`.
+ *   - object  → forwarded as-is (typically a Block Kit payload from buildPayload).
+ *
+ * Honors `SLACK_TIMEOUT_MS` env var (default 5000ms).
+ *
+ * @param {string|object} message - Text or pre-built webhook payload
+ * @param {object} [opts]         - Used only when `message` is a string
+ * @param {string} [opts.username]
+ * @param {string} [opts.iconEmoji]
+ * @returns {Promise<boolean>} true if the message was accepted (HTTP 2xx)
  */
-async function sendSlack(payload) {
-  const url = getWebhookUrl();
-  if (!url) {
-    logger.debug('SLACK_WEBHOOK_URL not configured — skipping Slack notification');
+async function sendSlack(message, opts = {}) {
+  const webhook = getWebhookUrl();
+  if (!webhook) {
+    logger.debug('SLACK_WEBHOOK_URL not configured, skipping Slack notification');
+    return false;
+  }
+
+  const timeout = Number(process.env.SLACK_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS;
+
+  let payload;
+  if (typeof message === 'string') {
+    payload = { text: message };
+    if (opts.username) payload.username = opts.username;
+    if (opts.iconEmoji) payload.icon_emoji = opts.iconEmoji;
+  } else if (message && typeof message === 'object') {
+    payload = message;
+  } else {
+    logger.warn('sendSlack called with empty message — skipping');
     return false;
   }
 
   try {
-    const response = await axios.post(url, payload, {
-      timeout: WEBHOOK_TIMEOUT_MS,
+    const response = await axios.post(webhook, payload, {
+      timeout,
       headers: { 'Content-Type': 'application/json' },
     });
 
-    if (response.status !== 200 || response.data !== 'ok') {
-      logger.warn(`Slack webhook returned unexpected response: ${response.status} ${JSON.stringify(response.data)}`);
+    if (response.status < 200 || response.status >= 300) {
+      logger.warn(`Slack webhook returned unexpected status: ${response.status}`);
       return false;
+    }
+    if (response.data && response.data !== 'ok') {
+      logger.warn(`Slack webhook body was not "ok": ${JSON.stringify(response.data)}`);
     }
     logger.info('Slack notification sent');
     return true;
