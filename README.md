@@ -99,10 +99,16 @@ Na primeira execucao, um QR code sera exibido no terminal para vincular o WhatsA
 
 | Variavel | Padrao | Descricao |
 |----------|--------|-----------|
-| `SLACK_WEBHOOK_URL` | - | URL de incoming webhook do Slack. Se ausente, Slack e desativado. |
+| `SLACK_WEBHOOK_URL` | - | URL de Incoming Webhook do Slack (https://hooks.slack.com/services/...). Sem ela, Slack e desativado. |
 | `SLACK_TIMEOUT_MS` | `5000` | Timeout HTTP em ms para o POST do webhook |
 
-Quando configurado, mensagens de sucesso (com periodo + caminho do PDF) e de erro (com message do erro) sao enviadas para o canal vinculado ao webhook.
+Para criar o webhook: https://api.slack.com/messaging/webhooks. Quando configurado, o sistema envia mensagens em Block Kit nos seguintes eventos:
+
+- :moneybag: **Pagamento processado** — guia DAE gerada com sucesso (competencia, guia, valor, caminho do PDF)
+- :rotating_light: **Problema na integracao** — falha durante autenticacao, encerramento de folha, geracao de guia, etc.
+- :white_check_mark: **Confirmacao** — etapas concluidas (ex.: folha encerrada para a competencia)
+
+Sem `SLACK_WEBHOOK_URL` configurado, as chamadas viram no-op.
 
 ### Agendamento
 
