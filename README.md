@@ -25,6 +25,7 @@ src/
   notifications/
     email.js                # Notificacoes via SMTP/Nodemailer
     whatsapp.js             # Notificacoes via WhatsApp Web
+    slack.js                # Notificacoes via Slack incoming webhook
   utils/
     logger.js               # Logger Winston com rotacao diaria
     competencia.js          # Calculo automatico de competencia
@@ -93,6 +94,20 @@ Copie `.env.example` para `.env` e configure:
 | `WHATSAPP_NUMBER` | Numero no formato internacional (ex: 5511999999999) |
 
 Na primeira execucao, um QR code sera exibido no terminal para vincular o WhatsApp.
+
+### Notificacoes Slack (opcional)
+
+| Variavel | Descricao |
+|----------|-----------|
+| `SLACK_WEBHOOK_URL` | URL de Incoming Webhook do Slack (https://hooks.slack.com/services/...) |
+
+Para criar o webhook: https://api.slack.com/messaging/webhooks. Quando configurado, o sistema envia mensagens em Block Kit nos seguintes eventos:
+
+- :moneybag: **Pagamento processado** — guia DAE gerada com sucesso (competencia, guia, valor, caminho do PDF)
+- :rotating_light: **Problema na integracao** — falha durante autenticacao, encerramento de folha, geracao de guia, etc.
+- :white_check_mark: **Confirmacao** — etapas concluidas (ex.: folha encerrada para a competencia)
+
+Sem `SLACK_WEBHOOK_URL` configurado, as chamadas viram no-op.
 
 ### Agendamento
 

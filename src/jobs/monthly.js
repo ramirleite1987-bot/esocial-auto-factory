@@ -11,6 +11,7 @@ const { listarFolhasAbertas, verificarCompetencia, encerrarFolha } = require('..
 const { gerarGuia, downloadGuiaPDF } = require('../esocial/guia');
 const { sendEmail } = require('../notifications/email');
 const { sendWhatsApp } = require('../notifications/whatsapp');
+const { notifyPayment, notifyError, notifyConfirmation } = require('../notifications/slack');
 const { recordJobRun } = require('../health');
 const { appendRun } = require('../utils/auditLog');
 
@@ -153,11 +154,29 @@ async function runJob() {
     const resultado = await withRetry(() => encerrarFolha(client, competencia), 'Encerrar folha');
     logger.info(`Resultado encerramento: ${JSON.stringify(resultado)}`);
 
+    // Slack confirmation: payroll closed
+    notifyConfirmation({
+      title: 'Folha encerrada',
+      message: `Folha de pagamento da competência *${periodo}* encerrada com sucesso.`,
+      fields: [
+        { label: 'Competência', value: periodo },
+        { label: 'Resultado', value: resultado && resultado.status ? String(resultado.status) : 'OK' },
+      ],
+    }).catch(() => {});
+
     // Step 6: Generate DAE and download PDF (with retry)
     const guiaId = await withRetry(() => gerarGuia(client, competencia), 'Gerar guia DAE');
     const pdfFilename = `DAE-${String(competencia.mes).padStart(2, '0')}-${competencia.ano}.pdf`;
     pdfPath = path.join(GUIAS_DIR, pdfFilename);
     await withRetry(() => downloadGuiaPDF(client, guiaId, pdfPath), 'Download PDF');
+
+    // Slack notification: payment slip ready (DAE = arrecadação / "conta paga")
+    notifyPayment({
+      periodo,
+      pdfPath,
+      guiaId,
+      valor: resultado && (resultado.valor || resultado.valorTotal),
+    }).catch(() => {});
 
     // Step 7: Send success email with PDF
     try {
@@ -217,6 +236,16 @@ async function runJob() {
       }
     } catch (waErr) {
       logger.error(`Falha ao enviar WhatsApp de erro: ${waErr.message}`);
+    }
+
+    try {
+      await notifyError({
+        context: 'job mensal',
+        error,
+        periodo,
+      });
+    } catch (slackErr) {
+      logger.error(`Falha ao enviar Slack de erro: ${slackErr.message}`);
     }
 
     recordJobRun('error');
