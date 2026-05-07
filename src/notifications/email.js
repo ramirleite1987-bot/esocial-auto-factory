@@ -6,6 +6,25 @@ const logger = require('../utils/logger').child({ context: 'email' });
 let transporter = null;
 
 /**
+ * Escape HTML special characters in user-supplied content.
+ * Prevents broken rendering and HTML injection when `body` or error
+ * messages contain `<`, `>`, `&`, or quotes (e.g. an HTML error page
+ * served by the eSocial backend).
+ *
+ * @param {*} value - Content to escape (coerced to string; null/undefined → "")
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Create SMTP transporter from environment variables and verify connection.
  * Best-effort — logs errors but never throws.
  */
@@ -31,14 +50,16 @@ async function initEmail() {
 
 /**
  * Build HTML for a success notification.
+ * Newlines in the body are preserved as <br/> after escaping.
  * @param {string} body - Main message body
  * @returns {string} HTML string
  */
 function successTemplate(body) {
+  const safe = escapeHtml(body).replace(/\n/g, '<br/>');
   return `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
       <h2 style="color:#2e7d32;">✅ eSocial — Processamento Concluído</h2>
-      <p>${body}</p>
+      <p>${safe}</p>
       <hr/>
       <p style="font-size:12px;color:#888;">Mensagem automática — esocial-auto</p>
     </div>`;
@@ -46,14 +67,16 @@ function successTemplate(body) {
 
 /**
  * Build HTML for a failure notification.
+ * Body is rendered inside a <pre> block so multi-line stack traces stay readable.
  * @param {string} body - Error details
  * @returns {string} HTML string
  */
 function failureTemplate(body) {
+  const safe = escapeHtml(body);
   return `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
       <h2 style="color:#c62828;">❌ eSocial — Falha no Processamento</h2>
-      <p>${body}</p>
+      <pre style="white-space:pre-wrap;background:#f7f7f7;padding:12px;border-radius:4px;font-family:Consolas,Monaco,monospace;font-size:12px;">${safe}</pre>
       <hr/>
       <p style="font-size:12px;color:#888;">Mensagem automática — esocial-auto</p>
     </div>`;
@@ -96,4 +119,4 @@ async function sendEmail({ subject, body, attachments, isError = false } = {}) {
   }
 }
 
-module.exports = { initEmail, sendEmail };
+module.exports = { initEmail, sendEmail, escapeHtml, successTemplate, failureTemplate };
