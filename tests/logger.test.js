@@ -43,3 +43,72 @@ describe('logger', () => {
     expect(() => child.debug('test debug')).not.toThrow();
   });
 });
+
+describe('redactSensitive', () => {
+  const { redactSensitive } = require('../src/utils/logger');
+
+  test('redacts sensitive top-level meta keys', () => {
+    const info = { level: 'info', message: 'login', token: 'abc', password: 'p1' };
+    redactSensitive(info);
+    expect(info.token).toBe('[REDACTED]');
+    expect(info.password).toBe('[REDACTED]');
+    expect(info.message).toBe('login');
+  });
+
+  test('does not redact reserved keys (level, message, context)', () => {
+    const info = { level: 'info', message: 'hello', context: 'auth' };
+    redactSensitive(info);
+    expect(info.level).toBe('info');
+    expect(info.message).toBe('hello');
+    expect(info.context).toBe('auth');
+  });
+
+  test('redacts case-insensitively and substring matches', () => {
+    const info = { level: 'info', message: 'x', AUTHORIZATION: 'Bearer xyz', user_cpf: '123' };
+    redactSensitive(info);
+    expect(info.AUTHORIZATION).toBe('[REDACTED]');
+    expect(info.user_cpf).toBe('[REDACTED]');
+  });
+
+  test('redacts nested sensitive keys within meta objects', () => {
+    const info = { level: 'info', message: 'x', meta: { user: { password: 'p1', name: 'alice' } } };
+    redactSensitive(info);
+    expect(info.meta.user.password).toBe('[REDACTED]');
+    expect(info.meta.user.name).toBe('alice');
+  });
+
+  test('redacts sensitive keys within message object', () => {
+    const info = { level: 'info', message: { user: 'alice', senha: 'p1', nested: { token: 'tok' } } };
+    redactSensitive(info);
+    expect(info.message.user).toBe('alice');
+    expect(info.message.senha).toBe('[REDACTED]');
+    expect(info.message.nested.token).toBe('[REDACTED]');
+  });
+
+  test('handles arrays of sensitive objects', () => {
+    const info = {
+      level: 'info',
+      message: 'x',
+      users: [{ password: 'p1' }, { password: 'p2', name: 'bob' }],
+    };
+    redactSensitive(info);
+    expect(info.users[0].password).toBe('[REDACTED]');
+    expect(info.users[1].password).toBe('[REDACTED]');
+    expect(info.users[1].name).toBe('bob');
+  });
+
+  test('handles circular references without throwing', () => {
+    const meta = { name: 'alice', token: 'tok' };
+    meta.self = meta;
+    const info = { level: 'info', message: 'x', meta };
+    expect(() => redactSensitive(info)).not.toThrow();
+    expect(info.meta.token).toBe('[REDACTED]');
+  });
+
+  test('preserves primitives in non-sensitive keys', () => {
+    const info = { level: 'info', message: 'x', count: 42, ok: true };
+    redactSensitive(info);
+    expect(info.count).toBe(42);
+    expect(info.ok).toBe(true);
+  });
+});

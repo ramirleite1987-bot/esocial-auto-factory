@@ -4,9 +4,12 @@ require('dotenv').config();
 
 const logger = require('./src/utils/logger').child({ context: 'main' });
 const { initWhatsApp } = require('./src/notifications/whatsapp');
-const { runJob, setupCron } = require('./src/jobs/monthly');
+const { runJob, setupCron, shutdown } = require('./src/jobs/monthly');
 const { startHealthServer } = require('./src/health');
 const { resolveSchedule } = require('./src/utils/scheduleConfig');
+
+let healthServer = null;
+let shuttingDown = false;
 
 const REQUIRED_ENV_VARS = ['GOVBR_CPF', 'GOVBR_SENHA'];
 
@@ -44,7 +47,7 @@ async function main() {
   });
 
   // Start health check server (if enabled)
-  startHealthServer();
+  healthServer = startHealthServer();
 
   // Set up cron job
   setupCron(schedule);
@@ -63,6 +66,42 @@ async function main() {
 
   logger.info('Waiting for scheduled cron execution...');
 }
+
+/**
+ * Graceful shutdown: stop cron, wait for in-flight job, close health server.
+ * Triggered by SIGTERM (Kubernetes/Docker stop) and SIGINT (Ctrl+C).
+ */
+async function gracefulShutdown(signal) {
+  if (shuttingDown) {
+    logger.warn(`${signal} received again — already shutting down`);
+    return;
+  }
+  shuttingDown = true;
+  logger.info(`${signal} received, iniciando graceful shutdown`);
+
+  let exitCode = 0;
+  try {
+    const result = await shutdown();
+    if (!result.drained) {
+      logger.warn('Shutdown timeout; job em execução pode ter sido interrompido');
+      exitCode = 1;
+    }
+  } catch (err) {
+    logger.error(`Erro durante shutdown: ${err.message}`);
+    exitCode = 1;
+  }
+
+  if (healthServer && typeof healthServer.close === 'function') {
+    await new Promise((resolve) => healthServer.close(resolve));
+    logger.info('Health server fechado');
+  }
+
+  logger.info(`Shutdown completo, saindo com código ${exitCode}`);
+  process.exit(exitCode);
+}
+
+process.on('SIGTERM', () => { gracefulShutdown('SIGTERM'); });
+process.on('SIGINT', () => { gracefulShutdown('SIGINT'); });
 
 // Global error handlers
 process.on('unhandledRejection', (reason) => {

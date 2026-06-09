@@ -117,6 +117,7 @@ Sem `SLACK_WEBHOOK_URL` configurado, as chamadas viram no-op.
 | `JOB_DIA_FECHAMENTO` | `7` | Dia do mes para executar |
 | `CRON_SCHEDULE` | - | Expressao cron customizada (sobrepoe JOB_DIA_FECHAMENTO) |
 | `JOB_MAX_RETRIES` | `3` | Tentativas maximas por operacao |
+| `SHUTDOWN_GRACE_MS` | `30000` | Tempo maximo para drenar o job em execucao em SIGTERM/SIGINT |
 
 ### Competencia
 
@@ -192,6 +193,17 @@ esocial_job_runs_total{status="error"} 1
 # TYPE esocial_last_job_timestamp_seconds gauge
 esocial_last_job_timestamp_seconds 1709798400
 ```
+
+## Graceful Shutdown
+
+Em `SIGTERM` (Kubernetes/Docker stop) ou `SIGINT` (Ctrl+C):
+
+1. O cron e parado (nao agenda novas execucoes).
+2. Se um job esta em execucao, o processo espera ate `SHUTDOWN_GRACE_MS` (padrao 30s) para que ele finalize naturalmente.
+3. O servidor de health (se habilitado) e fechado.
+4. O processo sai com codigo 0 (drenou limpo) ou 1 (atingiu o timeout).
+
+Configure `SHUTDOWN_GRACE_MS` para um valor menor que o `terminationGracePeriodSeconds` (Kubernetes) / `stop-timeout` (Docker) para evitar `SIGKILL` no meio do job.
 
 ## Fluxo do Job Mensal
 

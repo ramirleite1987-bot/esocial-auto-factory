@@ -20,6 +20,9 @@ const GUIAS_DIR = path.resolve(__dirname, '../../output/guias');
 const MAX_RETRIES = Number(process.env.JOB_MAX_RETRIES) || 3;
 const RETRY_BASE_DELAY_MS = 2000;
 
+let currentRun = null;
+let cronTask = null;
+
 /**
  * Sleep for a given number of milliseconds.
  * @param {number} ms
@@ -123,6 +126,17 @@ function releaseLock() {
  * 9. Release lock
  */
 async function runJob() {
+  if (currentRun) {
+    logger.warn('runJob called while a previous run is still in flight — awaiting existing run');
+    return currentRun;
+  }
+  currentRun = _runJobImpl().finally(() => {
+    currentRun = null;
+  });
+  return currentRun;
+}
+
+async function _runJobImpl() {
   logger.info('=== Iniciando job mensal eSocial ===');
   const startedAt = Date.now();
   let periodo = null;
@@ -316,7 +330,81 @@ function setupCron(cronExpression) {
     timezone: 'America/Sao_Paulo',
   });
 
+  cronTask = task;
   return task;
 }
 
-module.exports = { runJob, setupCron };
+/**
+ * Whether a job execution is currently in flight.
+ * @returns {boolean}
+ */
+function isRunning() {
+  return currentRun !== null;
+}
+
+/**
+ * Gracefully shut the job system down. Stops the cron scheduler so no new
+ * runs are triggered, then awaits the in-flight run (if any) up to
+ * `timeoutMs` (defaults to SHUTDOWN_GRACE_MS env var or 30s).
+ *
+ * Safe to call multiple times; idempotent.
+ *
+ * @param {number} [timeoutMs] - Max time to wait for the active job to finish
+ * @returns {Promise<{stopped: boolean, drained: boolean, durationMs: number}>}
+ *   `stopped` is true once the cron task is no longer scheduling new runs.
+ *   `drained` is true if the active run (if any) finished within timeoutMs;
+ *   false if the timeout elapsed first (the run may still be running).
+ */
+async function shutdown(timeoutMs) {
+  const startedAt = Date.now();
+  const grace = Number.isFinite(timeoutMs)
+    ? timeoutMs
+    : (Number(process.env.SHUTDOWN_GRACE_MS) || 30000);
+
+  if (cronTask) {
+    try {
+      if (typeof cronTask.stop === 'function') cronTask.stop();
+      if (typeof cronTask.destroy === 'function') cronTask.destroy();
+      logger.info('Cron task parado');
+    } catch (err) {
+      logger.warn(`Falha ao parar cron task: ${err.message}`);
+    }
+    cronTask = null;
+  }
+
+  if (!currentRun) {
+    return { stopped: true, drained: true, durationMs: Date.now() - startedAt };
+  }
+
+  logger.info(`Aguardando job em execução finalizar (até ${grace}ms)...`);
+
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), grace);
+  });
+
+  const result = await Promise.race([
+    currentRun.then(() => 'done').catch(() => 'done'),
+    timeout,
+  ]);
+  clearTimeout(timer);
+
+  const drained = result === 'done';
+  if (!drained) {
+    logger.warn(`Timeout de ${grace}ms atingido aguardando job; saindo com job ainda ativo`);
+  } else {
+    logger.info('Job finalizado limpo durante shutdown');
+  }
+
+  return { stopped: true, drained, durationMs: Date.now() - startedAt };
+}
+
+/**
+ * Reset module-level state. Intended for tests only.
+ */
+function _resetForTests() {
+  currentRun = null;
+  cronTask = null;
+}
+
+module.exports = { runJob, setupCron, shutdown, isRunning, _resetForTests };
