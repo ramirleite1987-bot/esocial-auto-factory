@@ -22,3 +22,7 @@ session.json
 
 # Test coverage
 coverage/
+
+# Local browser/e2e test artifacts
+.playwright-mcp/
+health-endpoint.png
