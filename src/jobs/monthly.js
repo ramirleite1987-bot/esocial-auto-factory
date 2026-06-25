@@ -168,15 +168,22 @@ async function _runJobImpl() {
     const resultado = await withRetry(() => encerrarFolha(client, competencia), 'Encerrar folha');
     logger.info(`Resultado encerramento: ${JSON.stringify(resultado)}`);
 
-    // Slack confirmation: payroll closed
-    notifyConfirmation({
-      title: 'Folha encerrada',
-      message: `Folha de pagamento da competência *${periodo}* encerrada com sucesso.`,
-      fields: [
-        { label: 'Competência', value: periodo },
-        { label: 'Resultado', value: resultado && resultado.status ? String(resultado.status) : 'OK' },
-      ],
-    }).catch(() => {});
+    // Slack confirmation: payroll closed.
+    // Awaited (not fire-and-forget) so the webhook POST completes before the
+    // process can exit — under `--run-now` index.js calls process.exit(0)
+    // immediately after runJob() resolves.
+    try {
+      await notifyConfirmation({
+        title: 'Folha encerrada',
+        message: `Folha de pagamento da competência *${periodo}* encerrada com sucesso.`,
+        fields: [
+          { label: 'Competência', value: periodo },
+          { label: 'Resultado', value: resultado && resultado.status ? String(resultado.status) : 'OK' },
+        ],
+      });
+    } catch (slackErr) {
+      logger.error(`Falha ao enviar Slack de confirmação: ${slackErr.message}`);
+    }
 
     // Step 6: Generate DAE and download PDF (with retry)
     const guiaId = await withRetry(() => gerarGuia(client, competencia), 'Gerar guia DAE');
@@ -184,13 +191,18 @@ async function _runJobImpl() {
     pdfPath = path.join(GUIAS_DIR, pdfFilename);
     await withRetry(() => downloadGuiaPDF(client, guiaId, pdfPath), 'Download PDF');
 
-    // Slack notification: payment slip ready (DAE = arrecadação / "conta paga")
-    notifyPayment({
-      periodo,
-      pdfPath,
-      guiaId,
-      valor: resultado && (resultado.valor || resultado.valorTotal),
-    }).catch(() => {});
+    // Slack notification: payment slip ready (DAE = arrecadação / "conta paga").
+    // Awaited for the same reason as the confirmation above.
+    try {
+      await notifyPayment({
+        periodo,
+        pdfPath,
+        guiaId,
+        valor: resultado && (resultado.valor || resultado.valorTotal),
+      });
+    } catch (slackErr) {
+      logger.error(`Falha ao enviar Slack de pagamento: ${slackErr.message}`);
+    }
 
     // Step 7: Send success email with PDF
     try {
