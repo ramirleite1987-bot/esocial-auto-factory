@@ -139,7 +139,9 @@ Sem `SLACK_WEBHOOK_URL` configurado, as chamadas viram no-op.
 | `LOG_LEVEL` | `info` | Nivel de log (debug, info, warn, error) |
 | `LOG_DIR` | `./logs` | Diretorio dos logs |
 | `HEALTH_ENABLED` | `false` | Ativar endpoint HTTP /health |
+| `HEALTH_TOKEN` | - | Token Bearer obrigatorio quando HEALTH_ENABLED=true |
 | `HEALTH_PORT` | `3000` | Porta do health check |
+| `HEALTH_HOST` | `127.0.0.1` | Endereco de bind do health check |
 | `AUDIT_LOG_PATH` | `./output/runs.jsonl` | Caminho do audit log (JSON Lines) |
 
 ## Uso
@@ -163,11 +165,11 @@ npm run lint
 
 ## Health Check
 
-Quando `HEALTH_ENABLED=true`, dois endpoints HTTP ficam disponiveis:
+Quando `HEALTH_ENABLED=true`, dois endpoints HTTP ficam disponiveis em `127.0.0.1` (exige `HEALTH_TOKEN`):
 
 ```bash
-curl http://localhost:3000/health
-curl http://localhost:3000/metrics
+curl -H "Authorization: Bearer $HEALTH_TOKEN" http://127.0.0.1:3000/health
+curl -H "Authorization: Bearer $HEALTH_TOKEN" http://127.0.0.1:3000/metrics
 ```
 
 `/health` retorna JSON:

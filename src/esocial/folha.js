@@ -4,6 +4,20 @@ const logger = require('../utils/logger').child({ context: 'esocial-folha' });
 const { getCompetencia } = require('../utils/competencia');
 
 /**
+ * Treat a close error as already-closed only when the body uses that phrasing
+ * (e.g. "já encerrada"), not the broader stem "encerrad" which also appears in
+ * denials such as "não pode ser encerrada".
+ * @param {*} body
+ * @returns {boolean}
+ */
+function bodyIndicatesAlreadyClosed(body) {
+  if (!body) return false;
+  const raw = typeof body === 'string' ? body : JSON.stringify(body);
+  const text = raw.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  return /\bja\s+encerrad/.test(text);
+}
+
+/**
  * List open (pending) payrolls.
  *
  * @param {import('axios').AxiosInstance} client - Configured eSocial HTTP client
@@ -71,10 +85,7 @@ async function encerrarFolha(client, competencia) {
 
     const alreadyClosed =
       (status === 400 || status === 409 || status === 422) &&
-      body &&
-      (typeof body === 'string'
-        ? body.toLowerCase().includes('encerrad')
-        : JSON.stringify(body).toLowerCase().includes('encerrad'));
+      bodyIndicatesAlreadyClosed(body);
 
     if (alreadyClosed) {
       logger.warn(`Folha ${periodo} já se encontra encerrada — ignorando`);

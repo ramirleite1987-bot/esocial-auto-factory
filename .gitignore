@@ -20,6 +20,9 @@ sessions/
 # Session file
 session.json
 
+# Monthly job lock (cwd, not /tmp)
+esocial-auto.lock
+
 # Test coverage
 coverage/
 
