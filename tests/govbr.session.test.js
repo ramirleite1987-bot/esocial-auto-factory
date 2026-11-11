@@ -4,6 +4,14 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// Session persistence has no logging contract. Avoid opening asynchronous file
+// transports in a directory the test removes immediately after the assertion.
+jest.mock('../src/utils/logger', () => {
+  const logger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+  logger.child = () => logger;
+  return logger;
+});
+
 describe('persistSession', () => {
   test('writes session.json with owner-only mode', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esocial-session-'));
