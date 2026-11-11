@@ -58,7 +58,11 @@ function loadPersistedSession() {
  * @param {object} state - Storage state from context.storageState()
  */
 function persistSession(state) {
-  fs.writeFileSync(SESSION_PATH, JSON.stringify(state, null, 2), 'utf-8');
+  fs.writeFileSync(SESSION_PATH, JSON.stringify(state, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600,
+  });
+  fs.chmodSync(SESSION_PATH, 0o600);
   logger.info('Session persisted to session.json');
 }
 
@@ -170,4 +174,4 @@ async function authenticate() {
   }
 }
 
-module.exports = { authenticate };
+module.exports = { authenticate, persistSession };

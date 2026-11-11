@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
 
 /*
  * End-to-end flow tests for the monthly job orchestrator (runJob).
@@ -12,7 +13,7 @@ const fs = require('fs');
  * audit logging, lock lifecycle, retry behaviour).
  */
 
-const LOCK_FILE = '/tmp/esocial-auto.lock';
+const LOCK_FILE = path.join(process.cwd(), 'esocial-auto.lock');
 
 // --- Mock every boundary module the orchestrator imports ---
 jest.mock('../src/auth/govbr', () => ({ authenticate: jest.fn() }));

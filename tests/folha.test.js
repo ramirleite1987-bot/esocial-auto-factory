@@ -104,6 +104,18 @@ describe('encerrarFolha', () => {
     expect(result.status).toBe('already_closed');
   });
 
+  test('does not treat a close denial containing encerrad as already_closed', async () => {
+    const client = createMockClient({});
+    const error = new Error('Request failed');
+    error.response = {
+      status: 400,
+      data: 'Folha não pode ser encerrada para este período',
+    };
+    client.post.mockRejectedValue(error);
+
+    await expect(encerrarFolha(client, { mes: 3, ano: 2025 })).rejects.toThrow('Request failed');
+  });
+
   test('throws on unexpected errors', async () => {
     const client = createMockClient({});
     const error = new Error('Network error');

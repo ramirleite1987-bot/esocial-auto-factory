@@ -15,7 +15,7 @@ const { notifyPayment, notifyError, notifyConfirmation } = require('../notificat
 const { recordJobRun } = require('../health');
 const { appendRun } = require('../utils/auditLog');
 
-const LOCK_FILE = '/tmp/esocial-auto.lock';
+const LOCK_FILE = path.join(process.cwd(), 'esocial-auto.lock');
 const GUIAS_DIR = path.resolve(__dirname, '../../output/guias');
 const MAX_RETRIES = Number(process.env.JOB_MAX_RETRIES) || 3;
 const RETRY_BASE_DELAY_MS = 2000;
@@ -70,7 +70,7 @@ async function withRetry(fn, label, maxRetries = MAX_RETRIES) {
  */
 function acquireLock() {
   try {
-    fs.writeFileSync(LOCK_FILE, String(process.pid), { flag: 'wx' });
+    fs.writeFileSync(LOCK_FILE, String(process.pid), { flag: 'wx', mode: 0o600 });
     logger.info(`Lock acquired: ${LOCK_FILE} (PID ${process.pid})`);
   } catch (err) {
     if (err.code === 'EEXIST') {
@@ -84,7 +84,7 @@ function acquireLock() {
           if (killErr.code === 'ESRCH') {
             logger.warn(`Stale lock detected (PID ${pid} not running), removing`);
             fs.unlinkSync(LOCK_FILE);
-            fs.writeFileSync(LOCK_FILE, String(process.pid), { flag: 'wx' });
+            fs.writeFileSync(LOCK_FILE, String(process.pid), { flag: 'wx', mode: 0o600 });
             logger.info(`Lock re-acquired: ${LOCK_FILE} (PID ${process.pid})`);
             return;
           }

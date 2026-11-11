@@ -1,6 +1,7 @@
 'use strict';
 
 const http = require('http');
+const crypto = require('crypto');
 const logger = require('./utils/logger').child({ context: 'health' });
 
 function resolveHealthPort() {
@@ -9,6 +10,38 @@ function resolveHealthPort() {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 65535) return 3000;
   return parsed;
+}
+
+function resolveHealthHost() {
+  const raw = process.env.HEALTH_HOST;
+  if (raw === undefined || raw === '') return '127.0.0.1';
+  return raw;
+}
+
+function readBearerToken(req) {
+  const header = req.headers && req.headers.authorization;
+  if (typeof header !== 'string') return '';
+  const match = header.match(/^Bearer\s+(\S+)\s*$/i);
+  return match ? match[1] : '';
+}
+
+function tokenMatches(provided, expected) {
+  const a = Buffer.from(String(provided));
+  const b = Buffer.from(String(expected));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function isAuthorized(req, expectedToken) {
+  return tokenMatches(readBearerToken(req), expectedToken);
+}
+
+function sendUnauthorized(res) {
+  res.writeHead(401, {
+    'Content-Type': 'application/json',
+    'WWW-Authenticate': 'Bearer',
+  });
+  res.end(JSON.stringify({ error: 'unauthorized' }));
 }
 
 const PROCESS_START_MS = Date.now();
@@ -67,8 +100,11 @@ function _resetForTests() {
 /**
  * Start a minimal HTTP health check server.
  * Routes:
- *   GET /health   → JSON status
- *   GET /metrics  → Prometheus text-format metrics
+ *   GET /health   → JSON status (requires Authorization: Bearer HEALTH_TOKEN)
+ *   GET /metrics  → Prometheus text-format metrics (same token)
+ *
+ * Binds 127.0.0.1 by default. HEALTH_ENABLED=true without HEALTH_TOKEN is fail-closed
+ * (server does not start).
  */
 function startHealthServer() {
   if (process.env.HEALTH_ENABLED !== 'true') {
@@ -76,7 +112,18 @@ function startHealthServer() {
     return null;
   }
 
+  const expectedToken = process.env.HEALTH_TOKEN;
+  if (!expectedToken) {
+    logger.error('HEALTH_ENABLED=true requires HEALTH_TOKEN; refusing to start health server');
+    return null;
+  }
+
   const server = http.createServer((req, res) => {
+    if (!isAuthorized(req, expectedToken)) {
+      sendUnauthorized(res);
+      return;
+    }
+
     if (req.method === 'GET' && req.url === '/health') {
       const payload = {
         status: 'ok',
@@ -103,8 +150,10 @@ function startHealthServer() {
   });
 
   const port = resolveHealthPort();
-  server.listen(port, () => {
-    logger.info(`Health check server listening on port ${server.address().port}`);
+  const host = resolveHealthHost();
+  server.listen(port, host, () => {
+    const addr = server.address();
+    logger.info(`Health check server listening on ${addr.address}:${addr.port}`);
   });
 
   server.on('error', (err) => {

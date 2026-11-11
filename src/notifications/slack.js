@@ -45,8 +45,9 @@ function buildPayload({ emoji, title, text, body, fields, channel }) {
     blocks.push({
       type: 'section',
       fields: fields.slice(0, 10).map((f) => ({
-        type: 'mrkdwn',
-        text: `*${f.label}*\n${f.value}`,
+        type: 'plain_text',
+        text: `${String(f.label === null || f.label === undefined ? '' : f.label)}\n${String(f.value === null || f.value === undefined ? '' : f.value)}`.slice(0, 2000),
+        emoji: true,
       })),
     });
   }

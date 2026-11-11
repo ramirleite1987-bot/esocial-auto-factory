@@ -46,20 +46,22 @@ describe('slack notifications', () => {
       expect(payload.blocks[payload.blocks.length - 1].type).toBe('context');
     });
 
-    test('renders fields as a section with mrkdwn entries', () => {
+    test('renders fields as a section with plain_text entries', () => {
       const payload = slack.buildPayload({
         emoji: ':bell:',
         title: 'X',
         text: 'x',
         fields: [
           { label: 'A', value: '1' },
-          { label: 'B', value: '2' },
+          { label: 'B', value: '<!channel> & *boom*' },
         ],
       });
       const fieldSection = payload.blocks.find((b) => b.type === 'section' && b.fields);
       expect(fieldSection).toBeDefined();
       expect(fieldSection.fields).toHaveLength(2);
-      expect(fieldSection.fields[0].text).toBe('*A*\n1');
+      expect(fieldSection.fields[0].type).toBe('plain_text');
+      expect(fieldSection.fields[0].text).toBe('A\n1');
+      expect(fieldSection.fields[1].text).toBe('B\n<!channel> & *boom*');
     });
 
     test('caps fields to 10 entries', () => {
@@ -155,7 +157,7 @@ describe('slack notifications', () => {
       expect(body.text).toContain('03/2025');
       const fieldSection = body.blocks.find((b) => b.type === 'section' && b.fields);
       const labels = fieldSection.fields.map((f) => f.text.split('\n')[0]);
-      expect(labels).toEqual(expect.arrayContaining(['*Competência*', '*Guia*', '*Valor*', '*PDF*']));
+      expect(labels).toEqual(expect.arrayContaining(['Competência', 'Guia', 'Valor', 'PDF']));
     });
 
     test('omits valor when not provided', async () => {
@@ -167,7 +169,7 @@ describe('slack notifications', () => {
       const body = axios.post.mock.calls[0][1];
       const fieldSection = body.blocks.find((b) => b.type === 'section' && b.fields);
       const labels = fieldSection.fields.map((f) => f.text.split('\n')[0]);
-      expect(labels).not.toContain('*Valor*');
+      expect(labels).not.toContain('Valor');
     });
   });
 
